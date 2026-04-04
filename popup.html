@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMSP Smart Collector</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --secondary: #10b981;
+    --accent: #f59e0b;
+    --danger: #ef4444;
+    --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    --card-bg: rgba(255,255,255,0.05);
+    --card-border: rgba(255,255,255,0.1);
+    --glass-bg: rgba(255,255,255,0.03);
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 380px;
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg-gradient);
+    color: var(--text-main);
+    font-size: 14px;
+    min-height: 560px;
+  }
+
+  /* HEADER */
+  .header {
+    background: rgba(0,0,0,0.25);
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--card-border);
+    position: relative; overflow: hidden;
+  }
+  .header::after {
+    content:''; position:absolute; top:-50%; left:-50%;
+    width:200%; height:200%;
+    background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .header-top { display:flex; align-items:center; gap:12px; position:relative; z-index:1; }
+  .header-icon {
+    width:42px; height:42px;
+    background: linear-gradient(135deg, var(--primary), #818cf8);
+    border-radius:12px; display:grid; place-items:center; font-size:22px;
+    box-shadow: 0 4px 14px rgba(99,102,241,0.45);
+  }
+  .header-title { font-size:17px; font-weight:800; letter-spacing:-0.02em; }
+  .header-version {
+    font-size:10px; background:rgba(99,102,241,0.2);
+    padding:2px 7px; border-radius:4px; color:#a5b4fc;
+    font-weight:700; margin-left:6px; vertical-align:middle;
+  }
+  .header-sub { font-size:11px; color:var(--text-muted); margin-top:4px; margin-left:54px; }
+
+  /* STATUS BAR */
+  .status-bar {
+    background: var(--glass-bg); padding:11px 20px;
+    display:flex; align-items:center; gap:10px; font-size:12px;
+    border-bottom:1px solid var(--card-border);
+  }
+  .status-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .dot-ok   { background:var(--secondary); box-shadow:0 0 8px var(--secondary); animation:pulse 2s infinite; }
+  .dot-warn { background:var(--accent);    box-shadow:0 0 8px var(--accent); }
+  .dot-erro { background:var(--danger);    box-shadow:0 0 8px var(--danger); }
+  @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.2);opacity:0.5} }
+  #statusText { color:var(--text-muted); flex:1; }
+
+  /* MAIN */
+  .main { padding:18px 20px; }
+  .section { margin-bottom:18px; }
+  .section-title {
+    font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.1em; color:var(--text-muted);
+    margin-bottom:10px; display:flex; align-items:center; gap:6px;
+  }
+
+  /* CARD */
+  .card {
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:16px; padding:16px; backdrop-filter:blur(10px);
+    transition:background 0.2s;
+  }
+  .card:hover { background:rgba(255,255,255,0.07); }
+
+  /* INPUTS */
+  .input-group { margin-bottom:14px; }
+  .input-group:last-child { margin-bottom:0; }
+  .input-label { font-size:11px; color:var(--text-muted); margin-bottom:6px; display:block; }
+  .input-wrapper { display:flex; gap:8px; }
+  input[type="text"] {
+    flex:1; padding:10px 14px;
+    background:rgba(0,0,0,0.25); border:1px solid var(--card-border);
+    border-radius:10px; color:var(--text-main);
+    font-family:'JetBrains Mono', monospace; font-size:12px;
+    outline:none; transition:all 0.2s;
+  }
+  input[type="text"]:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(99,102,241,0.2); }
+  input[type="text"]::placeholder { color:#475569; }
+
+  .btn-icon {
+    width:38px; height:38px;
+    background:var(--glass-bg); border:1px solid var(--card-border);
+    border-radius:10px; color:var(--text-main);
+    cursor:pointer; display:grid; place-items:center; font-size:16px;
+    transition:all 0.2s; flex-shrink:0;
+  }
+  .btn-icon:hover { background:rgba(255,255,255,0.1); border-color:var(--text-muted); }
+
+  /* ===== SELETOR DE COLUNAS ===== */
+  .columns-header {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:8px;
+  }
+  .columns-hint { font-size:10px; color:var(--text-muted); font-style:italic; }
+  .columns-actions { display:flex; gap:6px; }
+  .btn-cols-action {
+    font-size:10px; padding:3px 8px;
+    background:rgba(255,255,255,0.05); border:1px solid var(--card-border);
+    border-radius:5px; color:var(--text-muted); cursor:pointer;
+    font-family:inherit; transition:all 0.15s;
+  }
+  .btn-cols-action:hover { background:rgba(255,255,255,0.1); color:var(--text-main); }
+
+  .column-list { display:flex; flex-wrap:wrap; gap:6px; }
+
+  /* TAG CLICÁVEL */
+  .tag {
+    font-size:10px; padding:5px 10px;
+    border-radius:7px; font-weight:600;
+    font-family:'JetBrains Mono', monospace;
+    cursor:pointer; user-select:none;
+    transition:all 0.18s;
+    display:flex; align-items:center; gap:5px;
+    border:1px solid transparent;
+  }
+  /* Estado DESMARCADO */
+  .tag.off {
+    background:rgba(255,255,255,0.04);
+    border-color:rgba(255,255,255,0.08);
+    color:#475569;
+    text-decoration: line-through;
+    opacity:0.5;
+  }
+  /* Estado SELECIONADO */
+  .tag.on {
+    background:rgba(99,102,241,0.15);
+    border-color:rgba(99,102,241,0.35);
+    color:#a5b4fc;
+    box-shadow:0 0 8px rgba(99,102,241,0.15);
+  }
+  .tag.on::before { content:'✓'; font-size:9px; color:var(--secondary); }
+  /* Tag de identidade (Id, Aluno, Turma) — sempre ativas, não clicáveis */
+  .tag.fixed {
+    background:rgba(16,185,129,0.1);
+    border-color:rgba(16,185,129,0.25);
+    color:#6ee7b7;
+    cursor:default;
+  }
+  .tag.fixed::before { content:'🔒'; font-size:9px; }
+
+  /* AVISO sem colunas */
+  .no-cols-warning {
+    display:none; font-size:11px; color:var(--accent);
+    background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.2);
+    border-radius:8px; padding:8px 12px; margin-top:8px; text-align:center;
+  }
+
+  /* OPTIONS */
+  .checkbox-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .checkbox-item {
+    display:flex; align-items:center; gap:8px; cursor:pointer;
+    font-size:12px; padding:8px 10px;
+    background:rgba(255,255,255,0.02); border-radius:8px;
+    border:1px solid transparent; transition:all 0.2s;
+  }
+  .checkbox-item:hover { border-color:var(--card-border); background:var(--glass-bg); }
+  .checkbox-item input { accent-color:var(--primary); width:15px; height:15px; }
+
+  /* PROGRESS */
+  .progress-wrap { display:none; margin-bottom:18px; }
+  .progress-info { display:flex; justify-content:space-between; font-size:11px; margin-bottom:8px; color:var(--text-muted); }
+  .progress-bg { height:7px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; }
+  .progress-fill {
+    height:100%;
+    background:linear-gradient(90deg, var(--primary), var(--secondary));
+    width:0%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* RESULT CARD */
+  .result-card {
+    display:none;
+    background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25);
+    border-radius:16px; padding:16px; margin-bottom:16px;
+    animation:slideUp 0.4s ease-out;
+  }
+  @keyframes slideUp { from{transform:translateY(16px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .result-title { display:flex; align-items:center; gap:8px; font-weight:700; color:var(--secondary); margin-bottom:12px; font-size:14px; }
+  .result-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+  .result-item { background:rgba(255,255,255,0.04); padding:10px 8px; border-radius:10px; text-align:center; }
+  .result-val { font-family:'JetBrains Mono', monospace; font-size:18px; font-weight:700; color:var(--primary); }
+  .result-lab { font-size:9px; color:var(--text-muted); text-transform:uppercase; margin-top:3px; letter-spacing:0.05em; }
+
+  .btn-secondary {
+    width:100%; padding:11px; background:var(--secondary);
+    color:white; border:none; border-radius:10px;
+    font-weight:700; cursor:pointer; font-family:inherit; font-size:13px;
+    transition:background 0.2s;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-secondary:hover { background:#059669; }
+
+  /* MAIN BUTTON */
+  .btn-main {
+    width:100%; padding:15px;
+    background:linear-gradient(135deg, var(--primary), var(--primary-hover));
+    color:white; border:none; border-radius:14px;
+    font-family:inherit; font-size:15px; font-weight:700;
+    cursor:pointer; transition:all 0.3s; margin-bottom:14px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    box-shadow:0 10px 15px -3px rgba(99,102,241,0.3);
+  }
+  .btn-main:hover { transform:translateY(-2px); box-shadow:0 20px 25px -5px rgba(99,102,241,0.4); }
+  .btn-main:active { transform:translateY(0); }
+  .btn-main:disabled { opacity:0.5; filter:grayscale(1); transform:none; cursor:not-allowed; box-shadow:none; }
+
+  /* LOG */
+  .log-box {
+    background:rgba(0,0,0,0.35); border:1px solid var(--card-border);
+    border-radius:12px; padding:12px;
+    height:115px; overflow-y:auto;
+    font-family:'JetBrains Mono', monospace; font-size:10px; line-height:1.55;
+  }
+  .log-box::-webkit-scrollbar { width:4px; }
+  .log-box::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:2px; }
+  .log-line { margin-bottom:3px; }
+  .log-time { color:#475569; margin-right:8px; }
+  .log-ok   { color:var(--secondary); }
+  .log-err  { color:var(--danger); }
+  .log-warn { color:var(--accent); }
+  .log-msg  { color:var(--text-muted); }
+
+  .btn-lancar {
+    width:100%; padding:12px;
+    background:linear-gradient(135deg, #f59e0b, #d97706);
+    color:white; border:none; border-radius:10px;
+    font-family:inherit; font-size:13px; font-weight:700;
+    cursor:pointer; transition:all 0.3s;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    box-shadow:0 6px 12px -2px rgba(245,158,11,0.35);
+  }
+  .btn-lancar:hover { transform:translateY(-1px); box-shadow:0 10px 18px -3px rgba(245,158,11,0.45); }
+  .btn-lancar:active { transform:translateY(0); }
+  .btn-lancar:disabled { opacity:0.5; filter:grayscale(1); transform:none; cursor:not-allowed; box-shadow:none; }
+
+  .result-lancar {
+    margin-top:10px; padding:10px 12px; border-radius:8px; font-size:11px; line-height:1.7;
+    font-family:'JetBrains Mono', monospace;
+    background:rgba(0,0,0,0.25); border:1px solid var(--card-border);
+    max-height:100px; overflow-y:auto;
+  }
+  .result-lancar::-webkit-scrollbar { width:3px; }
+  .result-lancar::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); }
+
+  .footer {
+    padding:14px 20px 16px;
+    display:flex; justify-content:space-between; align-items:center;
+    border-top:1px solid var(--card-border); background:rgba(0,0,0,0.1);
+  }
+  .footer-text { font-size:10px; color:var(--text-muted); font-family:'JetBrains Mono', monospace; }
+  .btn-text {
+    background:none; border:none; color:var(--text-muted);
+    font-size:10px; text-decoration:underline; cursor:pointer; font-family:inherit;
+  }
+  .btn-text:hover { color:var(--danger); }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <div class="header-icon">🛡️</div>
+    <div>
+      <h1 class="header-title">CMSP Smart Collector <span class="header-version">V3.0</span></h1>
+    </div>
+  </div>
+  <p class="header-sub">Extração inteligente de diário de classe · CMSP</p>
+</header>
+
+<div class="status-bar">
+  <div class="status-dot dot-ok" id="statusDot"></div>
+  <span id="statusText">Sistema pronto</span>
+</div>
+
+<main class="main">
+
+  <!-- PLANILHA + NOME -->
+  <section class="section">
+    <div class="section-title"><span>📊</span> Planilha de Destino</div>
+    <div class="card">
+      <div class="input-group">
+        <label class="input-label">ID da Planilha (deixe vazio para criar nova)</label>
+        <div class="input-wrapper">
+          <input type="text" id="sheetId" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" autocomplete="off">
+          <button class="btn-icon" id="btnTestar" title="Salvar ID">💾</button>
+        </div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Identificador da Atividade / Coleta</label>
+        <input type="text" id="nomeColeta" placeholder="Ex: Avaliação de Matemática — Semana 3">
+      </div>
+    </div>
+  </section>
+
+  <!-- SELETOR DE COLUNAS -->
+  <section class="section">
+    <div class="section-title"><span>🗂️</span> Colunas a Exportar</div>
+    <div class="card">
+      <div class="columns-header">
+        <span class="columns-hint">Clique para ativar/desativar</span>
+        <div class="columns-actions">
+          <button class="btn-cols-action" id="btnSelecionarTodas">Todas</button>
+          <button class="btn-cols-action" id="btnDesmarcarTodas">Nenhuma</button>
+        </div>
+      </div>
+
+      <div class="column-list" id="columnList">
+        <!-- Colunas fixas de identidade (sempre exportadas) -->
+        <span class="tag fixed" data-col="Id">Id</span>
+        <span class="tag fixed" data-col="Aluno">Aluno</span>
+        <span class="tag fixed" data-col="Turma">Turma</span>
+        <!-- Colunas de atividade (selecionáveis) -->
+        <span class="tag on" data-col="Entregue em">Entregue em</span>
+        <span class="tag on" data-col="Duração">Duração</span>
+        <span class="tag on" data-col="Status">Status</span>
+        <span class="tag on" data-col="Nota">Nota</span>
+        <!-- Colunas extras da tela de Atividades -->
+        <span class="tag on" data-col="Título">Título</span>
+        <span class="tag on" data-col="Localizador">Localizador</span>
+        <span class="tag on" data-col="Publicação">Publicação</span>
+        <span class="tag on" data-col="Modelo">Modelo</span>
+        <span class="tag on" data-col="Expiração">Expiração</span>
+        <span class="tag on" data-col="Publicado por">Publicado por</span>
+        <span class="tag on" data-col="Autor">Autor</span>
+        <span class="tag on" data-col="Rótulo">Rótulo</span>
+      </div>
+
+      <div class="no-cols-warning" id="noCols">
+        ⚠️ Selecione ao menos uma coluna além das fixas.
+      </div>
+    </div>
+  </section>
+
+  <!-- OPÇÕES -->
+  <section class="section">
+    <div class="section-title"><span>⚙️</span> Configurações</div>
+    <div class="checkbox-grid">
+      <label class="checkbox-item">
+        <input type="checkbox" id="optTodasPaginas" checked>
+        <span>Multipage</span>
+      </label>
+      <label class="checkbox-item">
+        <input type="checkbox" id="optFormatar" checked>
+        <span>Auto-Format</span>
+      </label>
+      <label class="checkbox-item">
+        <input type="checkbox" id="optNovaPlanilha">
+        <span>Always New</span>
+      </label>
+      <label class="checkbox-item">
+        <input type="checkbox" id="optHistorico" checked>
+        <span>History</span>
+      </label>
+    </div>
+  </section>
+
+  <!-- LANÇAR 30% NA SALA DO FUTURO -->
+  <section class="section">
+    <div class="section-title"><span>🎯</span> Lançar 30% — Sala do Futuro</div>
+    <div class="card">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
+        Calcula a <strong style="color:#a5b4fc">média das notas coletadas × 30%</strong> e lança
+        automaticamente na aba da Sala do Futuro aberta no navegador.
+      </div>
+      <div class="input-group" style="margin-bottom:12px">
+        <label class="input-label">Percentual das atividades no bimestre</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="sliderPercentual" min="10" max="50" step="5" value="30"
+            style="flex:1;accent-color:var(--primary);cursor:pointer">
+          <span id="labelPercentual" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#a5b4fc;font-weight:700;min-width:36px;text-align:right">30%</span>
+        </div>
+      </div>
+      <button class="btn-lancar" id="btnLancar30">
+        <span>🚀</span> CALCULAR E LANÇAR NA SALA DO FUTURO
+      </button>
+      <div class="result-lancar" id="resultLancar" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- RESULTADO -->
+  <div class="result-card" id="resultCard">
+    <div class="result-title">✨ Sincronização Concluída!</div>
+    <div class="result-grid">
+      <div class="result-item">
+        <div class="result-val" id="resultTotal">0</div>
+        <div class="result-lab">Total</div>
+      </div>
+      <div class="result-item">
+        <div class="result-val" id="resultNovos">0</div>
+        <div class="result-lab">Novos</div>
+      </div>
+      <div class="result-item">
+        <div class="result-val" id="resultAtualizados">0</div>
+        <div class="result-lab">Atualizados</div>
+      </div>
+    </div>
+    <button class="btn-secondary" id="btnAbrirSheets">
+      🚀 ABRIR GOOGLE SHEETS
+    </button>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-info">
+      <span id="progressLabel">Coletando...</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bg"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+
+  <!-- BOTÃO PRINCIPAL -->
+  <button class="btn-main" id="btnColetar">
+    <span>💎</span> INICIAR COLETA INTELIGENTE
+  </button>
+
+  <!-- LOG -->
+  <section class="section">
+    <div class="section-title"><span>📋</span> Console Log</div>
+    <div class="log-box" id="logBox">
+      <div class="log-line">
+        <span class="log-time">00:00:00</span>
+        <span class="log-msg">Inicie a coleta na página do CMSP.</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span class="footer-text" id="footerInfo">v2.1 · CMSP Smart Collector</span>
+  <button class="btn-text" id="btnLimpar">CLEAR CONSOLE</button>
+</footer>
+
+<script src="popup.js"></script>
+</body>
+</html>
