@@ -365,7 +365,8 @@ document.getElementById('btnLimpar').addEventListener('click', () => {
   const hoje = new Date().toLocaleDateString('pt-BR');
   document.getElementById('nomeColeta').placeholder = `Ex: Atividade de ${hoje}`;
 
-  if (tab.url && tab.url.includes('cmsp.ip.tv')) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab && tab.url && tab.url.includes('cmsp.ip.tv')) {
     setStatus('Ambiente CMSP detectado', 'ok');
     log('Pronto para iniciar extração inteligente.', 'ok');
   } else {
@@ -402,6 +403,12 @@ async function checkRemoteVersion() {
   badge.style.background = 'rgba(245,158,11,0.1)';
 
   chrome.runtime.sendMessage({ acao: 'verificarVersao' }, (res) => {
+    if (chrome.runtime.lastError) {
+      console.warn('verificarVersao:', chrome.runtime.lastError.message);
+      badge.textContent = 'Erro API';
+      badge.className = 'tag off';
+      return;
+    }
     if (!res) {
       badge.textContent = 'Erro API';
       badge.className = 'tag off';
@@ -473,6 +480,12 @@ document.getElementById('btnBackupNow').addEventListener('click', async () => {
     dados: saved.ultimosDados, 
     token: saved.githubToken 
   }, (res) => {
+    if (chrome.runtime.lastError) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      log('Erro no backup: ' + chrome.runtime.lastError.message, 'erro');
+      return;
+    }
     btn.disabled = false;
     btn.textContent = originalText;
     if (res && res.sucesso) {
