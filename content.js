@@ -273,13 +273,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       'Título','Localizador','Publicação','Modelo','Expiração',
       'Publicado por','Autor','Rótulo'
     ];
-    coletarTodosOsDados(colunas).then(resultado => sendResponse(resultado));
+    coletarTodosOsDados(colunas)
+      .then(resultado => sendResponse(resultado))
+      .catch(err => sendResponse({ sucesso: false, erro: err.message, dados: [] }));
     return true;
   }
 
   if (request.acao === 'lancarNotas') {
-    // notas já vêm normalizadas do background
-    lancarNotasSalaFuturo(request.notas).then(resultado => sendResponse(resultado));
+    lancarNotasSalaFuturo(request.notas)
+      .then(resultado => sendResponse(resultado))
+      .catch(err => sendResponse({ sucesso: false, erro: err.message, lancados: 0, naoEncontrados: 0, log: [] }));
     return true;
   }
+
+  // Mensagem não reconhecida — responde imediatamente para não deixar a porta pendurada
+  sendResponse({ sucesso: false, erro: 'Ação desconhecida: ' + request.acao });
+  return false;
 });
