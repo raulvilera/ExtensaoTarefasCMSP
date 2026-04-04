@@ -1,4 +1,4 @@
-// content.js — CMSP Smart Collector v2.1
+// content.js — CMSP Smart Collector V3.0
 // Coleta apenas as colunas selecionadas pelo usuário no popup
 
 function waitForTable(timeout = 10000) {

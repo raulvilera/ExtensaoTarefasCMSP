@@ -1,4 +1,4 @@
-// background.js — Service Worker v2.0
+// background.js — Service Worker V3.0
 // Lógica de Diário de Classe: cada coleta adiciona colunas, alunos não se duplicam
 
 // =============================================

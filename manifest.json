@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "CMSP Smart Collector",
-  "version": "2.0",
-  "description": "Extração inteligente de diário de classe do CMSP (cmsp.ip.tv) para Google Sheets",
+  "name": "CMSP Smart Collector V3.0",
+  "version": "3.0",
+  "description": "Extração inteligente de diário de classe do CMSP (cmsp.ip.tv) para Google Sheets - V3.0",
   "permissions": [
     "activeTab",
     "scripting",

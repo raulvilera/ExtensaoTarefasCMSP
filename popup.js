@@ -1,4 +1,4 @@
-// popup.js — CMSP Smart Collector v2.1
+// popup.js — CMSP Smart Collector V3.0
 let sheetUrl = '';
 
 // =============================================

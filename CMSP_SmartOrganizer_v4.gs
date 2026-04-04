@@ -1,5 +1,5 @@
 // =============================================
-// CMSP Smart Organizer — Apps Script v3
+// CMSP Smart Organizer — Apps Script V3.0
 // ✓ Cada atividade em seu bloco de colunas
 // ✓ Nenhum aluno ou dado repetido
 // ✓ Linhas com cores alternadas
