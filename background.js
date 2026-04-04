@@ -28,7 +28,8 @@ async function getAbaInfo(token, spreadsheetId, nomeAba) {
   });
   if (!response.ok) return null;
   const data = await response.json();
-  const sheet = data.sheets.find(s => s.properties.title === nomeAba);
+  const nomeNormalizado = String(nomeAba || '').trim().toUpperCase();
+  const sheet = data.sheets.find(s => String(s.properties.title || '').trim().toUpperCase() === nomeNormalizado);
   return sheet ? sheet.properties : null;
 }
 
@@ -41,7 +42,7 @@ async function garantirAba(token, spreadsheetId, nomeAba) {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      requests: [{ addSheet: { properties: { title: nomeAba } } }]
+      requests: [{ addSheet: { properties: { title: String(nomeAba || "").trim() } } }]
     })
   });
 
