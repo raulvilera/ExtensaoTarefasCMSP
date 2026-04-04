@@ -157,11 +157,12 @@ async function escreverNoDiario(token, spreadsheetId, dados, nomeColeta, colunas
     }
   );
 
-  // --- 3. Mapeia IDs existentes → número da linha (1-indexed) ---
-  const mapaIds = new Map();
+  // --- 3. Mapeia Alunos existentes → número da linha (1-indexed) ---
+  const mapaAlunos = new Map();
   for (let i = 1; i < valoresAtuais.length; i++) {
-    const id = String(valoresAtuais[i][colId] || '').trim();
-    if (id) mapaIds.set(id, i + 1); // +1 porque Sheets é 1-indexed
+    // Busca pelo nome do aluno para evitar duplicidade nominal conforme solicitado
+    const aluno = String(valoresAtuais[i][colAluno] || '').trim().toUpperCase();
+    if (aluno) mapaAlunos.set(aluno, i + 1); // +1 porque Sheets é 1-indexed
   }
 
   const updates = [];   // batchUpdate para alunos existentes
@@ -169,24 +170,22 @@ async function escreverNoDiario(token, spreadsheetId, dados, nomeColeta, colunas
 
   dados.forEach(d => {
     const id = String(d[CAMPO_ID] || '').trim();
-    if (!id) return;
+    const aluno = String(d[CAMPO_ALUNO] || '').trim().toUpperCase();
+    
+    if (!aluno) return; // Ignora se não houver nome do aluno
 
     const valoresAtividade = CAMPOS_ATIVIDADE.map(c => d[c] || '');
 
-    if (mapaIds.has(id)) {
-      // Aluno já existe → atualiza apenas as novas colunas de atividade
-      const linhaNum = mapaIds.get(id);
+    if (mapaAlunos.has(aluno)) {
+      // Aluno já existe → atualiza apenas as novas colunas de atividade na mesma linha
+      const linhaNum = mapaAlunos.get(aluno);
       updates.push({
         range: `${nomeAba}!${letraNovaColBase}${linhaNum}:${indexParaLetra(novaColBaseIndex + CAMPOS_ATIVIDADE.length - 1)}${linhaNum}`,
         values: [valoresAtividade]
       });
-      // Atualiza turma se disponível (pode ter mudado)
-      if (d[CAMPO_TURMA]) {
-        updates.push({
-          range: `${nomeAba}!${indexParaLetra(colTurma)}${linhaNum}`,
-          values: [[d[CAMPO_TURMA]]]
-        });
-      }
+      
+      // Se o ID na planilha estiver vazio, preenche com o ID atual (pode ser o RA)
+      // Se já tiver um ID lá, mantemos o primeiro que foi registrado para estabilidade
     } else {
       // Aluno novo → linha completa com espaços nas colunas anteriores
       const novaLinha = new Array(novaColBaseIndex + CAMPOS_ATIVIDADE.length).fill('');
@@ -197,6 +196,8 @@ async function escreverNoDiario(token, spreadsheetId, dados, nomeColeta, colunas
         novaLinha[novaColBaseIndex + i] = d[c] || '';
       });
       novasLinhas.push(novaLinha);
+      // Evita duplicar no mesmo lote se o mesmo aluno aparecer 2x nos dados recebidos
+      mapaAlunos.set(aluno, -1); 
     }
   });
 

@@ -131,17 +131,16 @@ function _consolidar(dados, cabecalho, idxId, idxAluno, idxTurma, atividades, fn
     var aluno = idxAluno !== -1 ? String(linha[idxAluno] || "").trim() : "";
     var turma = idxTurma !== -1 ? String(linha[idxTurma] || "").trim() : "";
 
-    if (!id && !aluno) continue; // ignora linhas completamente vazias
+    if (!aluno) continue; // Nome do aluno é obrigatório para consolidar
 
-    var chave = id || aluno; // Id como chave primária; fallback = nome
+    var chave = aluno.toUpperCase(); // Usa o nome (em caixa alta) como identificador único
 
     if (!mapa[chave]) {
       mapa[chave] = { Id: id, Aluno: aluno, Turma: turma, atividades: {} };
       ordem.push(chave);
     } else {
-      // Complementa campos fixos que vieram vazios em linhas anteriores
-      if (!mapa[chave].Id    && id)    mapa[chave].Id    = id;
-      if (!mapa[chave].Aluno && aluno) mapa[chave].Aluno = aluno;
+      // Complementa ID ou Turma se estiverem vazios na linha original da planilha
+      if (!mapa[chave].Id && id) mapa[chave].Id = id;
       if (!mapa[chave].Turma && turma) mapa[chave].Turma = turma;
     }
 
@@ -325,9 +324,10 @@ function _processarFormatoAntigo(aba, dados, cabecalho) {
     var id     = idxId    !== -1 ? String(linha[idxId]    || "").trim() : "";
     var aluno  = idxAluno !== -1 ? String(linha[idxAluno] || "").trim() : "";
     var coleta = idxColeta !== -1 ? String(linha[idxColeta] || "Coleta 1").trim() : "Coleta 1";
-    if (!id && !aluno) continue;
+    
+    if (!aluno) continue;
 
-    var chave = id || aluno;
+    var chave = aluno.toUpperCase();
     if (!mapa[chave]) {
       mapa[chave] = {
         Id: id, Aluno: aluno,
@@ -343,7 +343,7 @@ function _processarFormatoAntigo(aba, dados, cabecalho) {
       var idx = cabecalho.indexOf(campo);
       if (idx === -1) return;
       var val = linha[idx];
-      if (String(val).trim() !== "" && mapa[chave].atividades[coleta][campo] === undefined) {
+      if (String(val).trim() !== "" && (mapa[chave].atividades[coleta][campo] === undefined || mapa[chave].atividades[coleta][campo] === "")) {
         mapa[chave].atividades[coleta][campo] = val;
       }
     });
