@@ -283,7 +283,7 @@ async function formatarPlanilha(token, spreadsheetId, nomeAba = 'Atividades') {
     // Colunas fixas (Id, Aluno, Turma) em azul índigo suave
     {
       repeatCell: {
-        range: { sheetId: 0, startRowIndex: 1, endRowIndex: endRow, startColumnIndex: 0, endColumnIndex: 3 },
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: endRow, startColumnIndex: 0, endColumnIndex: 3 },
         cell: {
           userEnteredFormat: {
             backgroundColor: { red: 0.94, green: 0.95, blue: 1.0 }
@@ -497,6 +497,25 @@ async function fazerBackupGitHub(dados, token) {
 }
 
 // =============================================
+// CRIAR PLANILHA NOVA
+// =============================================
+async function criarPlanilha(token, titulo) {
+  const response = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      properties: { title: titulo },
+      sheets: [
+        { properties: { title: 'Atividades' } },
+        { properties: { title: 'Histórico' } }
+      ]
+    })
+  });
+  if (!response.ok) throw new Error('Erro ao criar planilha: ' + response.status);
+  return await response.json();
+}
+
+// =============================================
 // LISTENER PRINCIPAL
 // =============================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -586,7 +605,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Verifica se a aba ativa é a Sala do Futuro
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab || !tab.url || !tab.url.includes('saladofuroprofessor.educacao.sp.gov.br')) {
+        if (!tab || !tab.url || !tab.url.includes('saladofuturoprofessor.educacao.sp.gov.br')) {
           sendResponse({ sucesso: false, erro: 'Abra a página de lançamento de notas da Sala do Futuro na aba ativa antes de lançar.' });
           return;
         }
