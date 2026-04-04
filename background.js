@@ -610,13 +610,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
-        // Injeta content.js se necessário
+        // Injeta content.js e aguarda antes de enviar mensagem
         try {
           await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
-          await new Promise(r => setTimeout(r, 600));
-        } catch (_) { /* já injetado */ }
+        } catch (_) { /* já injetado — ignora */ }
+        await new Promise(r => setTimeout(r, 700));
 
-        const resultado = await chrome.tabs.sendMessage(tab.id, { acao: 'lancarNotas', notas: notasFinais });
+        let resultado;
+        try {
+          resultado = await chrome.tabs.sendMessage(tab.id, { acao: 'lancarNotas', notas: notasFinais });
+        } catch (msgErr) {
+          throw new Error('Não foi possível comunicar com a página da Sala do Futuro. Recarregue a página e tente novamente.');
+        }
 
         sendResponse({
           sucesso: resultado.sucesso,
@@ -638,7 +643,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // ── Verificar Versão no GitHub ───────────────────────────────────────
   if (request.acao === 'verificarVersao') {
-    verificarAtualizacao().then(res => sendResponse(res));
+    verificarAtualizacao()
+      .then(res => sendResponse(res ?? { local: chrome.runtime.getManifest().version, remote: null, updateAvailable: false }))
+      .catch(() => sendResponse({ local: chrome.runtime.getManifest().version, remote: null, updateAvailable: false }));
     return true;
   }
 
