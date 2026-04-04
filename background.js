@@ -1,6 +1,10 @@
 // background.js — Service Worker V3.0
 // Lógica de Diário de Classe: cada coleta adiciona colunas, alunos não se duplicam
 
+const GITHUB_OWNER = 'raulvilera';
+const GITHUB_REPO  = 'ExtensaoTarefasCMSP';
+const GITHUB_RAW   = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main`;
+
 // =============================================
 // AUTENTICAÇÃO GOOGLE OAuth2
 // =============================================
@@ -425,6 +429,55 @@ async function registrarHistorico(token, spreadsheetId, total, nomeColeta, total
 }
 
 // =============================================
+// CONECTIVIDADE GITHUB
+// =============================================
+
+async function verificarAtualizacao() {
+  try {
+    const response = await fetch(`${GITHUB_RAW}/manifest.json`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Não foi possível acessar o GitHub');
+    const remoteManifest = await response.json();
+    const localVersion = chrome.runtime.getManifest().version;
+    
+    return {
+      local: localVersion,
+      remote: remoteManifest.version,
+      updateAvailable: parseFloat(remoteManifest.version) > parseFloat(localVersion)
+    };
+  } catch (err) {
+    console.error('Erro ao verificar atualização:', err);
+    return null;
+  }
+}
+
+async function fazerBackupGitHub(dados, token) {
+  if (!token) throw new Error('Token do GitHub não configurado');
+  
+  const fileName = `backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  const path = `historico/${fileName}`;
+  const content = btoa(JSON.stringify(dados, null, 2));
+
+  const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: `backup: snapshot automático ${new Date().toLocaleString()}`,
+      content: content
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`Erro GitHub: ${errorData.message}`);
+  }
+  return await response.json();
+}
+
+// =============================================
 // LISTENER PRINCIPAL
 // =============================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -542,6 +595,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ sucesso: false, erro: msg });
       }
     })();
+    return true;
+  }
+
+  // ── Verificar Versão no GitHub ───────────────────────────────────────
+  if (request.acao === 'verificarVersao') {
+    verificarAtualizacao().then(res => sendResponse(res));
+    return true;
+  }
+
+  // ── Fazer Backup no GitHub ───────────────────────────────────────────
+  if (request.acao === 'backupGitHub') {
+    const { dados, token } = request;
+    fazerBackupGitHub(dados, token)
+      .then(res => sendResponse({ sucesso: true, data: res }))
+      .catch(err => sendResponse({ sucesso: false, erro: err.message }));
     return true;
   }
 });

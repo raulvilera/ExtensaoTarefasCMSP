@@ -7,11 +7,14 @@
     "activeTab",
     "scripting",
     "storage",
-    "identity"
+    "identity",
+    "notifications"
   ],
   "host_permissions": [
     "https://cmsp.ip.tv/*",
-    "https://sheets.googleapis.com/*"
+    "https://sheets.googleapis.com/*",
+    "https://raw.githubusercontent.com/*",
+    "https://api.github.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

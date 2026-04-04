@@ -365,7 +365,6 @@ document.getElementById('btnLimpar').addEventListener('click', () => {
   const hoje = new Date().toLocaleDateString('pt-BR');
   document.getElementById('nomeColeta').placeholder = `Ex: Atividade de ${hoje}`;
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab.url && tab.url.includes('cmsp.ip.tv')) {
     setStatus('Ambiente CMSP detectado', 'ok');
     log('Pronto para iniciar extração inteligente.', 'ok');
@@ -373,4 +372,115 @@ document.getElementById('btnLimpar').addEventListener('click', () => {
     setStatus('Aguardando página CMSP', 'warn');
     log('Abra cmsp.ip.tv/tms/task para começar.', 'warn');
   }
+
+  // --- INICIALIZAÇÃO GITHUB ---
+  await inicializarGitHub();
 })();
+
+// =============================================
+// GITHUB CONNECTIVITY LOGIC
+// =============================================
+
+async function inicializarGitHub() {
+  const saved = await chrome.storage.local.get(['githubToken']);
+  if (saved.githubToken) {
+    document.getElementById('githubToken').value = saved.githubToken;
+    document.getElementById('githubBadge').textContent = 'Conectado ✓';
+    document.getElementById('githubBadge').className = 'tag on';
+  }
+
+  // Auto-check version
+  checkRemoteVersion();
+}
+
+async function checkRemoteVersion() {
+  const badge = document.getElementById('githubBadge');
+  const remoteEl = document.getElementById('remoteVersion');
+  
+  badge.textContent = 'Verificando...';
+  badge.className = 'tag on';
+  badge.style.background = 'rgba(245,158,11,0.1)';
+
+  chrome.runtime.sendMessage({ acao: 'verificarVersao' }, (res) => {
+    if (!res) {
+      badge.textContent = 'Erro API';
+      badge.className = 'tag off';
+      return;
+    }
+
+    remoteEl.textContent = 'V' + res.remote;
+    if (res.updateAvailable) {
+      badge.textContent = 'Atualização Disponível! 🚀';
+      badge.className = 'tag on';
+      badge.style.background = 'rgba(239,68,68,0.2)';
+      badge.style.color = '#f87171';
+      log(`Nova versão disponível no GitHub: V${res.remote}`, 'warn');
+    } else {
+      badge.textContent = 'Versão Atualizada ✓';
+      badge.className = 'tag on';
+      badge.style.background = 'rgba(16,185,129,0.1)';
+      badge.style.color = '#6ee7b7';
+    }
+  });
+}
+
+document.getElementById('btnCheckUpdate').addEventListener('click', checkRemoteVersion);
+
+document.getElementById('btnOpenRepo').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'https://github.com/raulvilera/ExtensaoTarefasCMSP' });
+});
+
+document.getElementById('toggleBackup').addEventListener('click', () => {
+  const controls = document.getElementById('backupControls');
+  const isHidden = controls.style.display === 'none';
+  controls.style.display = isHidden ? 'block' : 'none';
+  document.getElementById('toggleBackup').textContent = isHidden ? 'Recolher Configurações ↑' : 'Configurar Backup Remoto ↓';
+});
+
+document.getElementById('btnSaveToken').addEventListener('click', async () => {
+  const token = document.getElementById('githubToken').value.trim();
+  if (!token) {
+    log('Token vazio removido.', 'info');
+    await chrome.storage.local.remove('githubToken');
+    document.getElementById('githubBadge').textContent = 'Desconectado';
+    document.getElementById('githubBadge').className = 'tag off';
+    return;
+  }
+  await chrome.storage.local.set({ githubToken: token });
+  log('Token do GitHub salvo com sucesso.', 'ok');
+  document.getElementById('githubBadge').textContent = 'Conectado ✓';
+  document.getElementById('githubBadge').className = 'tag on';
+});
+
+document.getElementById('btnBackupNow').addEventListener('click', async () => {
+  const saved = await chrome.storage.local.get(['ultimosDados', 'githubToken']);
+  if (!saved.githubToken) {
+    log('Configure o Token do GitHub antes de fazer backup.', 'erro');
+    return;
+  }
+  if (!saved.ultimosDados || saved.ultimosDados.length === 0) {
+    log('Faça uma coleta antes de realizar o backup.', 'warn');
+    return;
+  }
+
+  const btn = document.getElementById('btnBackupNow');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'ENVIANDO... ⏳';
+
+  chrome.runtime.sendMessage({ 
+    acao: 'backupGitHub', 
+    dados: saved.ultimosDados, 
+    token: saved.githubToken 
+  }, (res) => {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    if (res && res.sucesso) {
+      log('Backup enviado com sucesso para o GitHub!', 'ok');
+      const url = res.data.content.html_url;
+      log(`Arquivo: ${res.data.content.name}`, 'info');
+    } else {
+      log('Erro no backup GitHub: ' + (res?.erro || 'Desconhecido'), 'erro');
+    }
+  });
+});

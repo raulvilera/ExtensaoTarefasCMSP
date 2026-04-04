@@ -381,6 +381,56 @@
     </div>
   </section>
 
+  <!-- GITHUB CONNECTIVITY -->
+  <section class="section">
+    <div class="section-title"><span>🌐</span> Conectividade GitHub</div>
+    <div class="card" style="padding:14px">
+      <div id="githubHeader" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+        <div style="font-size:12px; font-weight:600; color:var(--text-main)">Status do Repositório</div>
+        <div id="githubBadge" class="tag off" style="text-decoration:none; opacity:1">Desconectado</div>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px">
+        <div style="background:rgba(0,0,0,0.2); padding:8px; border-radius:8px; text-align:center">
+          <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase">Local</div>
+          <div id="localVersion" style="font-size:13px; font-weight:700; color:var(--primary)">V3.0</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.2); padding:8px; border-radius:8px; text-align:center">
+          <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase">GitHub</div>
+          <div id="remoteVersion" style="font-size:13px; font-weight:700; color:var(--accent)">-.-</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:12px">
+        <button class="btn-icon" id="btnCheckUpdate" title="Verificar Atualização" style="flex:1; width:auto; font-size:12px; flex-direction:row; gap:6px">
+          Verificar Atualização 🔄
+        </button>
+        <button class="btn-icon" id="btnOpenRepo" title="Abrir Repositório" style="width:42px">
+          📂
+        </button>
+      </div>
+
+      <!-- Backup Remote (Hidden by default, expands on click) -->
+      <div id="githubBackupSection">
+        <button id="toggleBackup" style="background:none; border:none; color:var(--text-muted); font-size:10px; cursor:pointer; text-decoration:underline; margin-bottom:8px">
+          Configurar Backup Remoto ↓
+        </button>
+        <div id="backupControls" style="display:none; animation: slideDown 0.3s ease-out">
+          <div class="input-group">
+            <label class="input-label">GitHub Token (PAT)</label>
+            <div class="input-wrapper">
+              <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxx" style="flex:1; padding:8px 12px; background:rgba(0,0,0,0.5); border:1px solid var(--card-border); border-radius:8px; color:white; font-size:11px">
+              <button class="btn-icon" id="btnSaveToken" style="width:34px; height:34px">💾</button>
+            </div>
+          </div>
+          <button class="btn-secondary" id="btnBackupNow" style="font-size:11px; padding:8px; background:var(--primary); margin-top:8px">
+            ENVIAR BACKUP AGORA ☁️
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- LANÇAR 30% NA SALA DO FUTURO -->
   <section class="section">
     <div class="section-title"><span>🎯</span> Lançar 30% — Sala do Futuro</div>
