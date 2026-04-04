@@ -157,47 +157,64 @@ async function escreverNoDiario(token, spreadsheetId, dados, nomeColeta, colunas
     }
   );
 
-  // --- 3. Mapeia Alunos existentes → número da linha (1-indexed) ---
-  const mapaAlunos = new Map();
+  // --- 3. Mapeia Alunos existentes na planilha para evitar duplicados ---
+  const mapaAlunosExistentes = new Map();
+  const normalizarNome = (n) => String(n || '').trim().normalize('NFC').toUpperCase();
+
   for (let i = 1; i < valoresAtuais.length; i++) {
-    // Busca pelo nome do aluno para evitar duplicidade nominal conforme solicitado
-    const aluno = String(valoresAtuais[i][colAluno] || '').trim().toUpperCase();
-    if (aluno) mapaAlunos.set(aluno, i + 1); // +1 porque Sheets é 1-indexed
+    const nomeOriginal = valoresAtuais[i][colAluno];
+    if (nomeOriginal) {
+      mapaAlunosExistentes.set(normalizarNome(nomeOriginal), i + 1);
+    }
   }
 
-  const updates = [];   // batchUpdate para alunos existentes
-  const novasLinhas = []; // append para alunos novos
-
+  // --- 4. Pré-consolida os DADOS recebidos (caso o mesmo aluno venha 2x no mesmo lote) ---
+  const dadosConsolidados = new Map();
   dados.forEach(d => {
-    const id = String(d[CAMPO_ID] || '').trim();
-    const aluno = String(d[CAMPO_ALUNO] || '').trim().toUpperCase();
-    
-    if (!aluno) return; // Ignora se não houver nome do aluno
+    const nome = normalizarNome(d[CAMPO_ALUNO]);
+    if (!nome) return;
 
+    if (!dadosConsolidados.has(nome)) {
+      dadosConsolidados.set(nome, { ...d });
+    } else {
+      // Mescla dados de atividade se o aluno já estiver no lote (preserva valores preenchidos)
+      const existente = dadosConsolidados.get(nome);
+      CAMPOS_ATIVIDADE.forEach(c => {
+        if (d[c] && !existente[c]) existente[c] = d[c];
+      });
+      if (d[CAMPO_ID] && !existente[CAMPO_ID]) existente[CAMPO_ID] = d[CAMPO_ID];
+      if (d[CAMPO_TURMA] && !existente[CAMPO_TURMA]) existente[CAMPO_TURMA] = d[CAMPO_TURMA];
+    }
+  });
+
+  const updates = [];     // batchUpdate para alunos que já estão na planilha
+  const novasLinhas = [];   // append para alunos novos
+
+  dadosConsolidados.forEach((d, nomeNorm) => {
+    const id = d[CAMPO_ID] || '';
     const valoresAtividade = CAMPOS_ATIVIDADE.map(c => d[c] || '');
 
-    if (mapaAlunos.has(aluno)) {
-      // Aluno já existe → atualiza apenas as novas colunas de atividade na mesma linha
-      const linhaNum = mapaAlunos.get(aluno);
+    if (mapaAlunosExistentes.has(nomeNorm)) {
+      // Aluno já existe → atualiza a linha correspondente nas NOVAS colunas
+      const linhaNum = mapaAlunosExistentes.get(nomeNorm);
       updates.push({
         range: `${nomeAba}!${letraNovaColBase}${linhaNum}:${indexParaLetra(novaColBaseIndex + CAMPOS_ATIVIDADE.length - 1)}${linhaNum}`,
         values: [valoresAtividade]
       });
-      
-      // Se o ID na planilha estiver vazio, preenche com o ID atual (pode ser o RA)
-      // Se já tiver um ID lá, mantemos o primeiro que foi registrado para estabilidade
     } else {
-      // Aluno novo → linha completa com espaços nas colunas anteriores
+      // Aluno novo → cria linha completa (fixas + anteriores vazias + atividades novas)
       const novaLinha = new Array(novaColBaseIndex + CAMPOS_ATIVIDADE.length).fill('');
-      novaLinha[colId]    = d[CAMPO_ID]    || '';
+      novaLinha[colId]    = id;
       novaLinha[colAluno] = d[CAMPO_ALUNO] || '';
       novaLinha[colTurma] = d[CAMPO_TURMA] || '';
+      
       CAMPOS_ATIVIDADE.forEach((c, i) => {
         novaLinha[novaColBaseIndex + i] = d[c] || '';
       });
       novasLinhas.push(novaLinha);
-      // Evita duplicar no mesmo lote se o mesmo aluno aparecer 2x nos dados recebidos
-      mapaAlunos.set(aluno, -1); 
+      
+      // Marca como já processado neste lote para evitar duplicidade acidental
+      mapaAlunosExistentes.set(nomeNorm, -99);
     }
   });
 

@@ -129,7 +129,10 @@ async function coletarTodosOsDados(colunasSelecionadas) {
     while (true) {
       console.log(`[CMSP] Lendo página ${pagina}...`);
       const rows = readTableRows(colunasSelecionadas);
-      rows.forEach(r => mapaUnico.set(r['Id'], r));
+      rows.forEach(r => {
+        const chave = String(r['Aluno'] || r['Id'] || '').trim().toUpperCase();
+        if (chave) mapaUnico.set(chave, r);
+      });
 
       const temProxima = await goToNextPage();
       if (!temProxima) break;
