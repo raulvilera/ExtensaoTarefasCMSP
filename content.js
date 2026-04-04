@@ -23,8 +23,13 @@ function getHeaders() {
 
 // Normaliza o nome do cabeçalho detectado na tabela para o nome canônico que o popup usa
 function normalizarHeader(h) {
-  const lower = h.toLowerCase();
-  if (lower === 'id')                                                        return 'Id';
+  const lower = h.toLowerCase().trim();
+  
+  // Identificadores únicos (ID) - CMSP usa várias formas
+  if (lower === 'id' || lower === 'nº' || lower === 'no.' || lower === '#' || lower === 'ra' || lower === 'código' || lower === 'matricula' || lower === 'matrícula') {
+    return 'Id';
+  }
+  
   if (lower.includes('aluno') || lower.includes('estudante') || lower.includes('nome')) return 'Aluno';
   if (lower.includes('turma') || lower.includes('série') || lower.includes('classe'))   return 'Turma';
   if (lower.includes('entregue') || lower.includes('concluído'))            return 'Entregue em';
@@ -53,7 +58,7 @@ function readTableRows(colunasSelecionadas) {
   console.log('[CMSP] Filtro de colunas:', [...filtro]);
 
   const rows = [];
-  document.querySelectorAll('table tbody tr').forEach(tr => {
+  document.querySelectorAll('table tbody tr').forEach((tr, rowIndex) => {
     const cells = tr.querySelectorAll('td');
     if (cells.length === 0) return;
 
@@ -64,8 +69,21 @@ function readTableRows(colunasSelecionadas) {
       }
     });
 
-    // Só inclui se tiver o campo Id (chave primária)
-    if (row['Id']) rows.push(row);
+    // SISTEMA DE FALLBACK PARA ID:
+    // Se não encontrou coluna explícita de "Id", tenta usar cabeçalhos de identidade
+    if (!row['Id']) {
+      // Tenta achar na célula original que deveria ser ID (geralmente a 1ª)
+      const possibleId = cells[0]?.innerText.trim();
+      if (possibleId && !isNaN(parseInt(possibleId))) {
+        row['Id'] = possibleId;
+      } else if (row['Aluno']) {
+        // Fallback final: cria um ID composto (Evita ignorar a linha)
+        row['Id'] = 'F_' + row['Aluno'].substring(0,10) + '_' + (row['Turma'] || rowIndex);
+      }
+    }
+
+    // Só inclui se tiver alguma identidade (ID ou Aluno)
+    if (row['Id'] || row['Aluno']) rows.push(row);
   });
 
   return rows;
