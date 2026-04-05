@@ -404,8 +404,8 @@ async function checkRemoteVersion() {
 
   chrome.runtime.sendMessage({ acao: 'verificarVersao' }, (res) => {
     if (chrome.runtime.lastError) {
-      console.warn('verificarVersao:', chrome.runtime.lastError.message);
-      badge.textContent = 'Erro API';
+      console.warn('Verificação de versão suspensa:', chrome.runtime.lastError.message);
+      badge.textContent = 'Indisponível';
       badge.className = 'tag off';
       return;
     }

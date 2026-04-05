@@ -644,8 +644,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // ── Verificar Versão no GitHub ───────────────────────────────────────
   if (request.acao === 'verificarVersao') {
     verificarAtualizacao()
-      .then(res => sendResponse(res ?? { local: chrome.runtime.getManifest().version, remote: null, updateAvailable: false }))
-      .catch(() => sendResponse({ local: chrome.runtime.getManifest().version, remote: null, updateAvailable: false }));
+      .then(res => {
+        if (!chrome.runtime.lastError) {
+          sendResponse(res ?? { local: chrome.runtime.getManifest().version, remote: null, updateAvailable: false });
+        }
+      })
+      .catch(() => {
+        if (!chrome.runtime.lastError) {
+          sendResponse({ local: chrome.runtime.getManifest().version, remote: null, updateAvailable: false });
+        }
+      });
     return true;
   }
 
