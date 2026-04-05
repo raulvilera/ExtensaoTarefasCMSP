@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "CMSP Smart Collector V3.0",
+  "version": "3.0",
+  "description": "Extração inteligente de diário de classe do CMSP (cmsp.ip.tv) para Google Sheets - V3.0",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "identity",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://cmsp.ip.tv/*",
+    "https://sheets.googleapis.com/*",
+    "https://raw.githubusercontent.com/*",
+    "https://api.github.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://cmsp.ip.tv/tms/task*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "oauth2": {
+    "client_id": "170843226237-sb8fnrshrh9bvcl7d8eeeqdrhtu47cqp.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.file"
+    ]
+  }
+}

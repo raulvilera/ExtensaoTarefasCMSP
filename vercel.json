@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build --prefix dashboard",
+  "outputDirectory": "dashboard/.next",
+  "framework": "nextjs"
+}
