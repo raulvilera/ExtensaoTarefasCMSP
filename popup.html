@@ -1,487 +1,250 @@
-// popup.js — CMSP Smart Collector V3.0
-let sheetUrl = '';
-
-// =============================================
-// SELETOR DE COLUNAS
-// =============================================
-
-// Retorna quais colunas opcionais estão ativas
-function getColunasAtivas() {
-  const ativas = [];
-  document.querySelectorAll('.tag.on').forEach(tag => {
-    ativas.push(tag.dataset.col);
-  });
-  return ativas;
-}
-
-// Verifica se há pelo menos uma coluna opcional selecionada
-function validarColunas() {
-  const ativas = getColunasAtivas();
-  const aviso = document.getElementById('noCols');
-  if (ativas.length === 0) {
-    aviso.style.display = 'block';
-    return false;
-  }
-  aviso.style.display = 'none';
-  return true;
-}
-
-// Toggle individual de tag
-document.getElementById('columnList').addEventListener('click', e => {
-  const tag = e.target.closest('.tag');
-  if (!tag || tag.classList.contains('fixed')) return;
-  tag.classList.toggle('on');
-  tag.classList.toggle('off');
-  validarColunas();
-  salvarSelecaoColunas();
-});
-
-// Selecionar todas
-document.getElementById('btnSelecionarTodas').addEventListener('click', () => {
-  document.querySelectorAll('.tag:not(.fixed)').forEach(t => {
-    t.classList.add('on');
-    t.classList.remove('off');
-  });
-  document.getElementById('noCols').style.display = 'none';
-  salvarSelecaoColunas();
-});
-
-// Desmarcar todas
-document.getElementById('btnDesmarcarTodas').addEventListener('click', () => {
-  document.querySelectorAll('.tag:not(.fixed)').forEach(t => {
-    t.classList.remove('on');
-    t.classList.add('off');
-  });
-  document.getElementById('noCols').style.display = 'block';
-  salvarSelecaoColunas();
-});
-
-// Persiste seleção no storage
-async function salvarSelecaoColunas() {
-  const ativas = getColunasAtivas();
-  await chrome.storage.local.set({ colunasAtivas: ativas });
-}
-
-// Restaura seleção salva
-async function restaurarSelecaoColunas() {
-  const saved = await chrome.storage.local.get('colunasAtivas');
-  if (!saved.colunasAtivas) return; // usa padrão (tudo on)
-  const salvas = new Set(saved.colunasAtivas);
-  document.querySelectorAll('.tag:not(.fixed)').forEach(tag => {
-    if (salvas.has(tag.dataset.col)) {
-      tag.classList.add('on');
-      tag.classList.remove('off');
-    } else {
-      tag.classList.remove('on');
-      tag.classList.add('off');
-    }
-  });
-}
-
-// =============================================
-// LOG
-// =============================================
-function log(mensagem, tipo = 'info') {
-  const box = document.getElementById('logBox');
-  const agora = new Date().toLocaleTimeString('pt-BR');
-  const icon = tipo === 'ok' ? '✓' : tipo === 'erro' ? '✗' : tipo === 'warn' ? '⚠' : 'ℹ';
-  const classe = tipo === 'ok' ? 'log-ok' : tipo === 'erro' ? 'log-err' : tipo === 'warn' ? 'log-warn' : 'log-msg';
-  const linha = document.createElement('div');
-  linha.className = 'log-line';
-  linha.innerHTML = `<span class="log-time">${agora}</span><span class="${classe}">${icon} ${mensagem}</span>`;
-  box.appendChild(linha);
-  box.scrollTop = box.scrollHeight;
-}
-
-// =============================================
-// STATUS BAR
-// =============================================
-function setStatus(texto, tipo = 'ok') {
-  const dot = document.getElementById('statusDot');
-  const txt = document.getElementById('statusText');
-  dot.className = 'status-dot';
-  dot.classList.add(tipo === 'ok' ? 'dot-ok' : tipo === 'warn' ? 'dot-warn' : 'dot-erro');
-  txt.textContent = texto;
-}
-
-// =============================================
-// PROGRESS
-// =============================================
-function setProgress(pct, label) {
-  document.getElementById('progressWrap').style.display = 'block';
-  document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressPct').textContent = pct + '%';
-  if (label) document.getElementById('progressLabel').textContent = label;
-}
-function hideProgress() {
-  document.getElementById('progressWrap').style.display = 'none';
-}
-
-// =============================================
-// RESULTADO
-// =============================================
-function mostrarResultado(total, novos, atualizados, url, erro = null) {
-  const card = document.getElementById('resultCard');
-  card.style.display = 'block';
-
-  if (erro) {
-    card.style.background = 'rgba(239,68,68,0.1)';
-    card.style.borderColor = 'rgba(239,68,68,0.25)';
-    document.querySelector('.result-title').textContent = '⚠️ Falha na Operação';
-    document.querySelector('.result-title').style.color = '#f87171';
-    document.getElementById('resultTotal').textContent = '!';
-    document.getElementById('resultNovos').textContent = '—';
-    document.getElementById('resultAtualizados').textContent = '—';
-    document.getElementById('btnAbrirSheets').style.display = 'none';
-  } else {
-    card.style.background = 'rgba(16,185,129,0.1)';
-    card.style.borderColor = 'rgba(16,185,129,0.25)';
-    document.querySelector('.result-title').textContent = '✨ Sincronização Concluída!';
-    document.querySelector('.result-title').style.color = '#10b981';
-    document.getElementById('resultTotal').textContent = total;
-    document.getElementById('resultNovos').textContent = novos;
-    document.getElementById('resultAtualizados').textContent = atualizados;
-    document.getElementById('btnAbrirSheets').style.display = 'flex';
-    sheetUrl = url;
-  }
-}
-
-// =============================================
-// BOTÃO PRINCIPAL
-// =============================================
-document.getElementById('btnColetar').addEventListener('click', async () => {
-  // Valida colunas antes de qualquer coisa
-  if (!validarColunas()) {
-    log('Selecione ao menos uma coluna para exportar.', 'warn');
-    return;
-  }
-
-  const btn = document.getElementById('btnColetar');
-  const originalHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span>⏳</span> PROCESSANDO...';
-  document.getElementById('resultCard').style.display = 'none';
-
-  setStatus('Iniciando protocolos...', 'warn');
-  log('Iniciando extração de dados inteligente...');
-
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab.url || !tab.url.includes('cmsp.ip.tv')) {
-      throw new Error('Página do CMSP não detectada na aba ativa.');
-    }
-
-    const nomeColeta = document.getElementById('nomeColeta').value.trim()
-      || `Coleta ${new Date().toLocaleString('pt-BR')}`;
-
-    // Colunas fixas (sempre incluídas) + colunas opcionais selecionadas
-    const colunasFixas = ['Id', 'Aluno', 'Turma'];
-    const colunasOpcionais = getColunasAtivas();
-    const todasColunas = [...colunasFixas, ...colunasOpcionais];
-
-    log(`Colunas selecionadas: ${todasColunas.join(', ')}`);
-    setProgress(20, 'Escaneando tabela...');
-
-    let resultado;
-    try {
-      resultado = await chrome.tabs.sendMessage(tab.id, {
-        acao: 'coletar',
-        colunasSelecionadas: todasColunas
-      });
-    } catch (e) {
-      log('Reinjetando scripts de coleta...', 'warn');
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
-      await new Promise(r => setTimeout(r, 900));
-      resultado = await chrome.tabs.sendMessage(tab.id, {
-        acao: 'coletar',
-        colunasSelecionadas: todasColunas
-      });
-    }
-
-    if (!resultado || !resultado.sucesso) {
-      throw new Error(resultado?.erro || 'O coletor não retornou dados válidos.');
-    }
-
-    log(`${resultado.total} registros únicos identificados.`, 'ok');
-    // Salva dados coletados para uso posterior no lançamento dos 30%
-    await chrome.storage.local.set({ ultimosDados: resultado.dados });
-    setProgress(50, 'Preparando Google Sheets...');
-
-    let spreadsheetId = document.getElementById('sheetId').value.trim();
-    if (document.getElementById('optNovaPlanilha').checked) spreadsheetId = '';
-
-    if (!spreadsheetId) {
-      const saved = await chrome.storage.local.get('spreadsheetId');
-      if (saved.spreadsheetId && !document.getElementById('optNovaPlanilha').checked) {
-        spreadsheetId = saved.spreadsheetId;
-        log('Utilizando planilha existente...', 'info');
-      } else {
-        log('Criando nova planilha no Google Drive...', 'info');
-      }
-    }
-
-    setProgress(75, 'Sincronizando registros...');
-    log('Enviando dados para o Google Sheets...');
-
-    const exportResult = await chrome.runtime.sendMessage({
-      acao: 'exportarSheets',
-      dados: resultado.dados,
-      spreadsheetId: spreadsheetId,
-      nomeColeta: nomeColeta,
-      colunasAtividade: colunasOpcionais
-    });
-
-    if (!exportResult || !exportResult.sucesso) {
-      throw new Error(exportResult?.erro || 'Erro na comunicação com a API do Google.');
-    }
-
-    log(`Sync finalizado: ${exportResult.totalAtualizados} atualizados / ${exportResult.totalNovos} novos.`, 'ok');
-    if (document.getElementById('optFormatar').checked) log('Layout da planilha otimizado.', 'ok');
-    if (document.getElementById('optHistorico').checked) log('Histórico registrado.', 'ok');
-
-    setProgress(100, 'Tudo pronto!');
-    setStatus('Sincronização concluída ✓', 'ok');
-    await chrome.storage.local.set({ ultimaColeta: nomeColeta });
-
-    setTimeout(() => {
-      hideProgress();
-      mostrarResultado(resultado.total, exportResult.totalNovos, exportResult.totalAtualizados, exportResult.url);
-      document.getElementById('footerInfo').textContent = `Sync: ${new Date().toLocaleTimeString('pt-BR')}`;
-      log(`🎉 "${nomeColeta}" concluída com sucesso!`, 'ok');
-    }, 700);
-
-  } catch (err) {
-    log(err.message, 'erro');
-    setStatus('Erro operacional', 'erro');
-    hideProgress();
-    mostrarResultado(0, 0, 0, '', err.message);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
-  }
-});
-
-// =============================================
-// LANÇAR 30% — SALA DO FUTURO
-// =============================================
-
-// Slider de percentual
-document.getElementById('sliderPercentual').addEventListener('input', e => {
-  document.getElementById('labelPercentual').textContent = e.target.value + '%';
-});
-
-document.getElementById('btnLancar30').addEventListener('click', async () => {
-  const btn = document.getElementById('btnLancar30');
-  const resultDiv = document.getElementById('resultLancar');
-  const originalHtml = btn.innerHTML;
-
-  // Precisa ter dados coletados na memória
-  const saved = await chrome.storage.local.get('ultimosDados');
-  if (!saved.ultimosDados || saved.ultimosDados.length === 0) {
-    log('⚠ Faça uma coleta do CMSP antes de lançar.', 'warn');
-    resultDiv.style.display = 'block';
-    resultDiv.style.color = '#f59e0b';
-    resultDiv.innerHTML = '⚠ Nenhum dado coletado ainda. Colete as notas do CMSP primeiro.';
-    return;
-  }
-
-  btn.disabled = true;
-  btn.innerHTML = '<span>⏳</span> CALCULANDO E LANÇANDO...';
-  resultDiv.style.display = 'none';
-  setStatus('Lançando notas na Sala do Futuro...', 'warn');
-  log('Calculando médias e lançando 30% na Sala do Futuro...');
-
-  const percentual = parseInt(document.getElementById('sliderPercentual').value) / 100;
-
-  try {
-    const resultado = await chrome.runtime.sendMessage({
-      acao: 'calcularELancar',
-      dados: saved.ultimosDados,
-      percentual
-    });
-
-    if (!resultado || !resultado.sucesso) {
-      throw new Error(resultado?.erro || 'Erro ao lançar notas.');
-    }
-
-    const linhasLog = (resultado.log || []).join('\n');
-    resultDiv.style.display = 'block';
-    resultDiv.style.color = '#6ee7b7';
-    resultDiv.innerHTML =
-      `✅ <strong>${resultado.lancados}</strong> alunos lançados | ` +
-      `⚠ <strong>${resultado.naoEncontrados}</strong> não encontrados\n\n` +
-      linhasLog;
-
-    setStatus(`${resultado.lancados} notas lançadas ✓`, 'ok');
-    log(`✓ ${resultado.lancados} notas lançadas na Sala do Futuro (${Math.round(percentual * 100)}%).`, 'ok');
-    if (resultado.naoEncontrados > 0) {
-      log(`⚠ ${resultado.naoEncontrados} alunos não encontrados na tabela.`, 'warn');
-    }
-
-  } catch (err) {
-    resultDiv.style.display = 'block';
-    resultDiv.style.color = '#f87171';
-    resultDiv.innerHTML = '✗ ' + err.message;
-    log(err.message, 'erro');
-    setStatus('Erro ao lançar', 'erro');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
-  }
-});
-
-// =============================================
-// HELPERS
-// =============================================
-document.getElementById('btnTestar').addEventListener('click', async () => {
-  const id = document.getElementById('sheetId').value.trim();
-  if (!id) { log('Insira um ID de planilha válido.', 'warn'); return; }
-  await chrome.storage.local.set({ spreadsheetId: id });
-  log(`ID ...${id.slice(-8)} salvo como padrão.`, 'ok');
-});
-
-document.getElementById('btnAbrirSheets').addEventListener('click', () => {
-  if (sheetUrl) chrome.tabs.create({ url: sheetUrl });
-  else chrome.storage.local.get('spreadsheetUrl', d => { if (d.spreadsheetUrl) chrome.tabs.create({ url: d.spreadsheetUrl }); });
-});
-
-document.getElementById('btnLimpar').addEventListener('click', () => {
-  document.getElementById('logBox').innerHTML =
-    '<div class="log-line"><span class="log-time">--:--:--</span><span class="log-msg">Console reiniciado.</span></div>';
-});
-
-// =============================================
-// INICIALIZAÇÃO
-// =============================================
-(async () => {
-  await restaurarSelecaoColunas();
-
-  const saved = await chrome.storage.local.get(['spreadsheetId', 'ultimaColeta']);
-  if (saved.spreadsheetId) {
-    document.getElementById('sheetId').value = saved.spreadsheetId;
-    log(`Planilha salva: ...${saved.spreadsheetId.slice(-8)}`, 'ok');
-  }
-
-  const hoje = new Date().toLocaleDateString('pt-BR');
-  document.getElementById('nomeColeta').placeholder = `Ex: Atividade de ${hoje}`;
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab && tab.url && tab.url.includes('cmsp.ip.tv')) {
-    setStatus('Ambiente CMSP detectado', 'ok');
-    log('Pronto para iniciar extração inteligente.', 'ok');
-  } else {
-    setStatus('Aguardando página CMSP', 'warn');
-    log('Abra cmsp.ip.tv/tms/task para começar.', 'warn');
-  }
-
-  // --- INICIALIZAÇÃO GITHUB ---
-  await inicializarGitHub();
-})();
-
-// =============================================
-// GITHUB CONNECTIVITY LOGIC
-// =============================================
-
-async function inicializarGitHub() {
-  const saved = await chrome.storage.local.get(['githubToken']);
-  if (saved.githubToken) {
-    document.getElementById('githubToken').value = saved.githubToken;
-    document.getElementById('githubBadge').textContent = 'Conectado ✓';
-    document.getElementById('githubBadge').className = 'tag on';
-  }
-
-  // Auto-check version
-  checkRemoteVersion();
-}
-
-async function checkRemoteVersion() {
-  const badge = document.getElementById('githubBadge');
-  const remoteEl = document.getElementById('remoteVersion');
-  
-  badge.textContent = 'Verificando...';
-  badge.className = 'tag on';
-  badge.style.background = 'rgba(245,158,11,0.1)';
-
-  chrome.runtime.sendMessage({ acao: 'verificarVersao' }, (res) => {
-    if (!res) {
-      badge.textContent = 'Erro API';
-      badge.className = 'tag off';
-      return;
-    }
-
-    remoteEl.textContent = 'V' + res.remote;
-    if (res.updateAvailable) {
-      badge.textContent = 'Atualização Disponível! 🚀';
-      badge.className = 'tag on';
-      badge.style.background = 'rgba(239,68,68,0.2)';
-      badge.style.color = '#f87171';
-      log(`Nova versão disponível no GitHub: V${res.remote}`, 'warn');
-    } else {
-      badge.textContent = 'Versão Atualizada ✓';
-      badge.className = 'tag on';
-      badge.style.background = 'rgba(16,185,129,0.1)';
-      badge.style.color = '#6ee7b7';
-    }
-  });
-}
-
-document.getElementById('btnCheckUpdate').addEventListener('click', checkRemoteVersion);
-
-document.getElementById('btnOpenRepo').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://github.com/raulvilera/ExtensaoTarefasCMSP' });
-});
-
-document.getElementById('toggleBackup').addEventListener('click', () => {
-  const controls = document.getElementById('backupControls');
-  const isHidden = controls.style.display === 'none';
-  controls.style.display = isHidden ? 'block' : 'none';
-  document.getElementById('toggleBackup').textContent = isHidden ? 'Recolher Configurações ↑' : 'Configurar Backup Remoto ↓';
-});
-
-document.getElementById('btnSaveToken').addEventListener('click', async () => {
-  const token = document.getElementById('githubToken').value.trim();
-  if (!token) {
-    log('Token vazio removido.', 'info');
-    await chrome.storage.local.remove('githubToken');
-    document.getElementById('githubBadge').textContent = 'Desconectado';
-    document.getElementById('githubBadge').className = 'tag off';
-    return;
-  }
-  await chrome.storage.local.set({ githubToken: token });
-  log('Token do GitHub salvo com sucesso.', 'ok');
-  document.getElementById('githubBadge').textContent = 'Conectado ✓';
-  document.getElementById('githubBadge').className = 'tag on';
-});
-
-document.getElementById('btnBackupNow').addEventListener('click', async () => {
-  const saved = await chrome.storage.local.get(['ultimosDados', 'githubToken']);
-  if (!saved.githubToken) {
-    log('Configure o Token do GitHub antes de fazer backup.', 'erro');
-    return;
-  }
-  if (!saved.ultimosDados || saved.ultimosDados.length === 0) {
-    log('Faça uma coleta antes de realizar o backup.', 'warn');
-    return;
-  }
-
-  const btn = document.getElementById('btnBackupNow');
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'ENVIANDO... ⏳';
-
-  chrome.runtime.sendMessage({ 
-    acao: 'backupGitHub', 
-    dados: saved.ultimosDados, 
-    token: saved.githubToken 
-  }, (res) => {
-    btn.disabled = false;
-    btn.textContent = originalText;
-    if (res && res.sucesso) {
-      log('Backup enviado com sucesso para o GitHub!', 'ok');
-      const url = res.data.content.html_url;
-      log(`Arquivo: ${res.data.content.name}`, 'info');
-    } else {
-      log('Erro no backup GitHub: ' + (res?.erro || 'Desconhecido'), 'erro');
-    }
-  });
-});
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMSP Smart Collector V3.0</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            width: 420px;
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            font-size: 13px;
+        }
+
+        /* HEADER */
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-bottom: 1px solid var(--card-border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .header-title { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;}
+        .header-title span.v { font-size: 10px; background: rgba(99,102,241,0.2); color: #a5b4fc; padding: 2px 6px; border-radius: 4px; }
+        
+        .status-bar { padding: 8px 15px; font-size: 11px; display: flex; gap: 6px; background: var(--glass-bg); border-bottom: 1px solid var(--card-border); align-items: center; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot-ok { background: var(--secondary); box-shadow: 0 0 8px var(--secondary); }
+        .dot-warn { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+        .dot-erro { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+        .main { padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+
+        /* CARDS */
+        .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px; backdrop-filter: blur(10px); }
+        .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between;}
+
+        /* INPUTS */
+        .input-group { margin-bottom: 10px; }
+        .input-group label { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+        .input-row { display: flex; gap: 8px; }
+        input[type="text"], input[type="password"] {
+            width: 100%; padding: 8px 10px; background: rgba(0,0,0,0.2);
+            border: 1px solid var(--card-border); border-radius: 8px;
+            color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 11px; outline: none; transition: 0.2s;
+        }
+        input[type="text"]:focus { border-color: var(--primary); }
+        
+        /* BOTÕES */
+        button { cursor: pointer; font-family: 'Outfit'; transition: 0.2s; border: none; outline: none; }
+        .btn-main {
+            width: 100%; padding: 12px; background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+            color: white; border-radius: 10px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 15px rgba(99,102,241,0.3);
+        }
+        .btn-main:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.4); }
+        .btn-main:disabled { filter: grayscale(1); opacity: 0.7; cursor: not-allowed; transform: none; }
+        
+        .btn-sec { padding: 6px 10px; background: var(--glass-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; font-size: 10px; font-weight: 600; }
+        .btn-sec:hover { background: rgba(255,255,255,0.1); }
+        
+        .btn-icon { padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); color: var(--text-main); }
+        .btn-icon:hover { border-color: var(--text-muted); }
+
+        /* TAGS & COLUNAS */
+        #columnList { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; margin-bottom: 8px;}
+        .tag { font-size: 10px; padding: 4px 6px; border-radius: 4px; cursor: pointer; user-select: none; border: 1px solid transparent; font-weight: 600; }
+        .tag.fixed { background: rgba(255,255,255,0.1); color: #ccc; cursor: not-allowed; }
+        .tag.on { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: #34d399; }
+        .tag.off { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.2); color: #f87171; }
+
+        /* CHECKBOXES */
+        .checkbox-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .checkbox-row label { font-size: 10px; display: flex; align-items: center; gap: 4px; cursor: pointer; background: var(--glass-bg); padding: 4px 8px; border-radius: 4px;}
+        
+        /* LOG CONSOLE */
+        #logBox { height: 90px; overflow-y: auto; background: rgba(0,0,0,0.4); padding: 8px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; line-height: 1.4; border: 1px solid var(--card-border); }
+        #logBox::-webkit-scrollbar { width: 4px; }
+        #logBox::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+        .log-line { border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 2px; margin-bottom: 2px; }
+        .log-time { color: #64748b; margin-right: 4px; }
+        .log-ok { color: var(--secondary); }
+        .log-err { color: var(--danger); }
+        .log-warn { color: var(--accent); }
+
+        /* PROGRESSO */
+        #progressWrap { height: 6px; background: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+        #progressFill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), var(--secondary)); transition: width 0.3s; }
+        
+        /* RESULT CARD */
+        #resultCard { display: none; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); padding: 12px; border-radius: 10px; }
+        .result-title { font-weight: 700; color: var(--secondary); margin-bottom: 8px; }
+        
+        /* SALA DO FUTURO (Lançar 30%) */
+        .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        input[type="range"] { flex: 1; accent-color: var(--accent); }
+        #labelPercentual { font-weight: 700; color: var(--accent); width: 35px; text-align: right; }
+        #btnLancar30 { background: linear-gradient(135deg, var(--accent), #d97706); width: 100%; padding: 10px; border-radius: 8px; font-weight: 700; color: white; display: flex; align-items: center; justify-content: center; gap: 6px;}
+
+        /* GITHUB & FOOTER */
+        .footer { padding: 15px; border-top: 1px solid var(--card-border); background: rgba(0,0,0,0.2); display: flex; justify-content: space-between; align-items: center; }
+        #footerInfo { font-size: 9px; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-title">🛡️ CMSP Smart Collector <span class="v">V3.0</span></div>
+        <div style="display:flex; gap:6px;">
+            <button id="btnCheckUpdate" class="btn-sec" title="Check Update">🔄</button>
+            <button id="btnOpenRepo" class="btn-sec" title="Open GitHub">GH</button>
+            <span id="githubBadge" class="tag off">Desconectado</span>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div id="statusDot" class="status-dot dot-ok"></div>
+        <span id="statusText">Aguardando página do CMSP...</span>
+        <span id="remoteVersion" style="margin-left:auto; color:var(--text-muted);"></span>
+    </div>
+
+    <div class="main">
+        
+        <!-- PLANILHA & COLETA -->
+        <div class="card">
+            <div class="card-title">1. Configuração Sheets</div>
+            <div class="input-group">
+                <label>ID da Planilha</label>
+                <div class="input-row">
+                    <input type="text" id="sheetId" placeholder="Deixe em branco para criar nova">
+                    <button id="btnTestar" class="btn-icon" title="Salvar ID local">💾</button>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>Nome desta Coleta</label>
+                <input type="text" id="nomeColeta">
+            </div>
+            <div class="checkbox-row">
+                <label><input type="checkbox" id="optNovaPlanilha"> Nova Aba</label>
+                <label><input type="checkbox" id="optFormatar" checked> Formatar</label>
+                <label><input type="checkbox" id="optHistorico" checked> Registrar Histórico</label>
+            </div>
+        </div>
+
+        <!-- COLUNAS -->
+        <div class="card">
+            <div class="card-title">
+                2. Filtro de Colunas
+                <div>
+                    <button id="btnSelecionarTodas" class="btn-sec">Tudo</button>
+                    <button id="btnDesmarcarTodas" class="btn-sec">Nenhuma</button>
+                </div>
+            </div>
+            <div id="noCols" style="display:none; color:var(--danger); font-size:10px; margin-bottom:5px;">Selecione ao menos uma!</div>
+            <div id="columnList">
+                <span class="tag fixed" data-col="Id">Id</span>
+                <span class="tag fixed" data-col="Aluno">Aluno</span>
+                <span class="tag fixed" data-col="Turma">Turma</span>
+                <span class="tag on" data-col="Entregue em">Entregue em</span>
+                <span class="tag on" data-col="Duração">Duração</span>
+                <span class="tag on" data-col="Status">Status</span>
+                <span class="tag on" data-col="Nota">Nota</span>
+                <span class="tag off" data-col="Título">Título</span>
+                <span class="tag off" data-col="Localizador">Localizador</span>
+                <span class="tag off" data-col="Publicação">Publicação</span>
+                <span class="tag off" data-col="Modelo">Modelo</span>
+                <span class="tag off" data-col="Expiração">Expiração</span>
+                <span class="tag off" data-col="Publicado por">Publicado por</span>
+                <span class="tag off" data-col="Autor">Autor</span>
+                <span class="tag off" data-col="Rótulo">Rótulo</span>
+            </div>
+            
+            <div id="progressWrap" style="display:none; margin-top:10px;">
+                <div id="progressFill"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:9px; color:var(--text-muted); margin-bottom:10px;">
+                <span id="progressLabel"></span>
+                <span id="progressPct"></span>
+            </div>
+            
+            <button id="btnColetar" class="btn-main">💎 EXTRAIR PARA SHEETS</button>
+            <div id="resultCard">
+                <div class="result-title">Sincronizado!</div>
+                <div>Lidos: <span id="resultTotal"></span></div>
+                <div>Novos: <span id="resultNovos"></span></div>
+                <div>Atualizados: <span id="resultAtualizados"></span></div>
+                <button id="btnAbrirSheets" class="btn-sec" style="margin-top:8px; width:100%;">Abrir Sheets</button>
+            </div>
+        </div>
+
+        <!-- SALA DO FUTURO -->
+        <div class="card">
+            <div class="card-title">3. Lançar na Sala do Futuro</div>
+            <div class="slider-row">
+                <span style="font-size:10px; color:var(--text-muted);">Percentual (ex: 30%)</span>
+                <input type="range" id="sliderPercentual" min="1" max="100" value="30">
+                <span id="labelPercentual">30%</span>
+            </div>
+            <button id="btnLancar30">⚡ LANÇAR NOTAS NA TELA ATIVA</button>
+            <div id="resultLancar" style="display:none; font-size:10px; padding-top:8px; white-space:pre-wrap;"></div>
+        </div>
+
+        <!-- BACKUP GITHUB -->
+        <div class="card">
+            <div class="card-title">
+                GitHub Sync
+                <button id="toggleBackup" class="btn-sec">Ajustes</button>
+            </div>
+            <div id="backupControls" style="display:none; margin-top:8px;">
+                <label style="font-size:10px; color:var(--text-muted);">Token (Opcional):</label>
+                <div class="input-row" style="margin-bottom:8px;">
+                    <input type="password" id="githubToken" placeholder="ghp_...">
+                    <button id="btnSaveToken" class="btn-icon">💾</button>
+                </div>
+                <button id="btnBackupNow" class="btn-sec" style="width:100%">Fazer Backup do JSON Agora</button>
+            </div>
+        </div>
+
+        <!-- CONSOLE -->
+        <div class="card">
+            <div class="card-title">Console Log <button id="btnLimpar" class="btn-sec" style="padding:2px 5px">Clear</button></div>
+            <div id="logBox"></div>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <span id="footerInfo">Smart Collector V3.0</span>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
