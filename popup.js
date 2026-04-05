@@ -171,6 +171,7 @@ document.getElementById('btnColetar').addEventListener('click', async () => {
       throw new Error('Página do CMSP não detectada na aba ativa.');
     }
 
+    const isLote = tab.url.includes('/tms/task') && !tab.url.includes('detail');
     const nomeColeta = document.getElementById('nomeColeta').value.trim()
       || `Coleta ${new Date().toLocaleString('pt-BR')}`;
 
@@ -182,34 +183,8 @@ document.getElementById('btnColetar').addEventListener('click', async () => {
     log(`Colunas selecionadas: ${todasColunas.join(', ')}`);
     setProgress(20, 'Escaneando tabela...');
 
-    let resultado;
-    try {
-      resultado = await chrome.tabs.sendMessage(tab.id, {
-        acao: 'coletar',
-        colunasSelecionadas: todasColunas
-      });
-    } catch (e) {
-      log('Reinjetando scripts de coleta...', 'warn');
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
-      await new Promise(r => setTimeout(r, 900));
-      resultado = await chrome.tabs.sendMessage(tab.id, {
-        acao: 'coletar',
-        colunasSelecionadas: todasColunas
-      });
-    }
-
-    if (!resultado || !resultado.sucesso) {
-      throw new Error(resultado?.erro || 'O coletor não retornou dados válidos.');
-    }
-
-    log(`${resultado.total} registros únicos identificados.`, 'ok');
-    // Salva dados coletados para uso posterior no lançamento dos 30%
-    await chrome.storage.local.set({ ultimosDados: resultado.dados });
-    setProgress(50, 'Preparando Google Sheets...');
-
     let spreadsheetId = document.getElementById('sheetId').value.trim();
     if (document.getElementById('optNovaPlanilha').checked) spreadsheetId = '';
-
     if (!spreadsheetId) {
       const saved = await chrome.storage.local.get('spreadsheetId');
       if (saved.spreadsheetId && !document.getElementById('optNovaPlanilha').checked) {
@@ -219,6 +194,51 @@ document.getElementById('btnColetar').addEventListener('click', async () => {
         log('Criando nova planilha no Google Drive...', 'info');
       }
     }
+
+    let resultado;
+    try {
+      resultado = await chrome.tabs.sendMessage(tab.id, {
+        acao: isLote ? 'iniciarColetaLote' : 'coletar',
+        colunasSelecionadas: todasColunas
+      });
+    } catch (e) {
+      log('Reinjetando scripts de coleta...', 'warn');
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+      await new Promise(r => setTimeout(r, 900));
+      resultado = await chrome.tabs.sendMessage(tab.id, {
+        acao: isLote ? 'iniciarColetaLote' : 'coletar',
+        colunasSelecionadas: todasColunas
+      });
+    }
+
+    if (!resultado || !resultado.sucesso) {
+      throw new Error(resultado?.erro || 'O coletor não retornou dados válidos.');
+    }
+
+    if (isLote) {
+      log(resultado.mensagem, 'warn');
+      log('NÃO FECHE O NAVEGADOR! Acompanhe pelas novas abas que estão sendo abertas.', 'warn');
+      // Passar a planilha para o motor de fundo
+      chrome.runtime.sendMessage({
+         acao: 'configurarExportacaoLote',
+         spreadsheetId: spreadsheetId,
+         nomeColeta: nomeColeta,
+         colunasOpcionais: colunasOpcionais,
+         opcoes: {
+           formatar: document.getElementById('optFormatar').checked,
+           historico: document.getElementById('optHistorico').checked
+         }
+      });
+      // Restaurar o botão original pq o background assumiu a tarefa
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+      return; 
+    }
+
+    log(`${resultado.total} registros únicos identificados.`, 'ok');
+    // Salva dados coletados para uso posterior no lançamento dos 30%
+    await chrome.storage.local.set({ ultimosDados: resultado.dados });
+    setProgress(50, 'Preparando Google Sheets...');
 
     setProgress(75, 'Sincronizando registros...');
     log('Enviando dados para o Google Sheets...');
@@ -256,8 +276,11 @@ document.getElementById('btnColetar').addEventListener('click', async () => {
     hideProgress();
     mostrarResultado(0, 0, 0, '', err.message);
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
+    // Only reset button if it wasn't a batch operation that returned early
+    if (btn.disabled) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
   }
 });
 
@@ -368,7 +391,14 @@ document.getElementById('btnLimpar').addEventListener('click', () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab && tab.url && tab.url.includes('cmsp.ip.tv')) {
     setStatus('Ambiente CMSP detectado', 'ok');
-    log('Pronto para iniciar extração inteligente.', 'ok');
+    if (tab.url.includes('/tms/task') && !tab.url.includes('detail')) {
+      const btn = document.getElementById('btnColetar');
+      btn.innerHTML = '<span>💎</span> COLETA EM LOTE';
+      btn.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
+      log('Modo PILOTO AUTOMÁTICO ativado (Listagem).', 'warn');
+    } else {
+      log('Pronto para iniciar extração individual.', 'ok');
+    }
   } else {
     setStatus('Aguardando página CMSP', 'warn');
     log('Abra cmsp.ip.tv/tms/task para começar.', 'warn');

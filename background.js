@@ -6,6 +6,11 @@ const GITHUB_REPO  = 'ExtensaoTarefasCMSP';
 const GITHUB_RAW   = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main`;
 
 // =============================================
+// VARIÁVEIS GLOBAIS DE ESTADO
+// =============================================
+let configuracaoLote = null;
+
+// =============================================
 // AUTENTICAÇÃO GOOGLE OAuth2
 // =============================================
 async function getAuthToken() {
@@ -663,6 +668,110 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     fazerBackupGitHub(dados, token)
       .then(res => sendResponse({ sucesso: true, data: res }))
       .catch(err => sendResponse({ sucesso: false, erro: err.message }));
+    return true;
+  }
+
+  // ── Modo Lote: Configurar Motor ──────────────────────────────────────
+  if (request.acao === 'configurarExportacaoLote') {
+    configuracaoLote = {
+      spreadsheetId: request.spreadsheetId,
+      nomeColeta: request.nomeColeta,
+      colunasOpcionais: request.colunasOpcionais,
+      opcoes: request.opcoes
+    };
+    return false;
+  }
+
+  // ── Modo Lote: Loop de Navegação ─────────────────────────────────────
+  if (request.acao === 'processarLoteEmBackground') {
+    const { links, colunas } = request;
+    (async () => {
+      try {
+        const dadosConsolidados = [];
+        for (let i = 0; i < links.length; i++) {
+          const { url, titulo } = links[i];
+          console.log(`[Lote] Processando ${i+1}/${links.length}: ${titulo}`);
+
+          // Abre a aba em segundo plano
+          const aba = await chrome.tabs.create({ url: url, active: false });
+          
+          // Aguarda carregamento do React da página
+          await new Promise(r => setTimeout(r, 4500));
+
+          try {
+            await chrome.scripting.executeScript({ target: { tabId: aba.id }, files: ['content.js'] });
+            await new Promise(r => setTimeout(r, 1000));
+
+            const res = await chrome.tabs.sendMessage(aba.id, {
+              acao: 'coletar', colunasSelecionadas: colunas
+            });
+
+            if (res && res.sucesso && res.dados) {
+              // Concatena nos dados totais
+              dadosConsolidados.push(...res.dados);
+            }
+          } catch(e) {
+            console.error(`[Lote] Falha na leitura de ${titulo}:`, e);
+          }
+
+          // Fecha aba
+          await chrome.tabs.remove(aba.id);
+        }
+
+        // Fim da varredura
+        console.log(`[Lote] Finalizado. Total de Registros Únicos: ${dadosConsolidados.length}`);
+        await chrome.storage.local.set({ ultimosDados: dadosConsolidados });
+
+        if (configuracaoLote) {
+           const { spreadsheetId, nomeColeta, colunasOpcionais } = configuracaoLote;
+           
+           const token = await getAuthToken();
+           let sheetId = spreadsheetId;
+           if (!sheetId) {
+               const nova = await criarPlanilha(token, `CMSP Lote — ${new Date().toLocaleDateString('pt-BR')}`);
+               sheetId = nova.spreadsheetId;
+               await chrome.storage.local.set({ spreadsheetId: sheetId });
+           }
+
+           // Exportação (Exatamente como coleta individual, mas com Lote)
+           const { totalNovos, totalAtualizados } = await escreverNoDiario(token, sheetId, dadosConsolidados, nomeColeta, colunasOpcionais, 'Atividades');
+           await formatarPlanilha(token, sheetId, 'Atividades');
+
+           const turmas = {};
+           dadosConsolidados.forEach(d => {
+               const t = String(d.Turma || 'Sem Turma').trim();
+               if (!turmas[t]) turmas[t] = [];
+               turmas[t].push(d);
+           });
+
+           for (const [nomeTurma, dadosTurma] of Object.entries(turmas)) {
+               await garantirAba(token, sheetId, nomeTurma);
+               await escreverNoDiario(token, sheetId, dadosTurma, nomeColeta, colunasOpcionais, nomeTurma);
+               await formatarPlanilha(token, sheetId, nomeTurma);
+           }
+
+           await registrarHistorico(token, sheetId, dadosConsolidados.length, nomeColeta + " (Lote Auto)", totalNovos, totalAtualizados);
+           configuracaoLote = null;
+        }
+
+        // Notificação de Sucesso do Chrome
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon128.png',
+          title: 'CMSP Smart Collector: Lote Concluído! 💎',
+          message: `Processamos ${links.length} atividades.\nColetei ${dadosConsolidados.length} notas no total e já mandei tudo pro seu Sheets! Pode lançar os 30% na Sala do Futuro.`
+        });
+
+      } catch (err) {
+        console.error('[Lote] Erro grave:', err);
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon128.png',
+          title: 'CMSP: Erro no Lote',
+          message: `Houve uma falha fatal: ${err.message}`
+        });
+      }
+    })();
     return true;
   }
 });

@@ -47,6 +47,11 @@ function normalizarHeader(h) {
   return h; // mantém o nome original se não reconhecer
 }
 
+const DICIONARIO_TURMAS = {
+  'r214c52ef35fef6464-sp': '8º Ano A',
+  // O usuário pode adicionar novos IDs de turmas nesta lista copiando a linha acima
+};
+
 // Lê as linhas filtrando apenas as colunas desejadas
 function readTableRows(colunasSelecionadas) {
   const headers = getHeaders();
@@ -65,7 +70,12 @@ function readTableRows(colunasSelecionadas) {
     const row = {};
     mapeado.forEach((nomeCanônico, i) => {
       if (filtro.has(nomeCanônico) && cells[i]) {
-        row[nomeCanônico] = cells[i].innerText.trim().replace(/\n+/g, ' ');
+        let valor = cells[i].innerText.trim().replace(/\n+/g, ' ');
+        // Se for a coluna Turma e existir tradução no dicionário, substitui
+        if (nomeCanônico === 'Turma' && DICIONARIO_TURMAS[valor]) {
+          valor = DICIONARIO_TURMAS[valor];
+        }
+        row[nomeCanônico] = valor;
       }
     });
 
@@ -283,6 +293,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     lancarNotasSalaFuturo(request.notas)
       .then(resultado => sendResponse(resultado))
       .catch(err => sendResponse({ sucesso: false, erro: err.message, lancados: 0, naoEncontrados: 0, log: [] }));
+    return true;
+  }
+
+  // NOVA ACAO: Coletar links da listagem (Modo Lote)
+  if (request.acao === 'iniciarColetaLote') {
+    const links = Array.from(document.querySelectorAll('a[href*="/tms/task/detail/"]'))
+      .map(a => ({
+        url: a.href,
+        titulo: a.innerText.trim()
+      }))
+      .filter((v, i, a) => a.findIndex(t => t.url === v.url) === i); // remove duplicados
+
+    if (links.length === 0) {
+      sendResponse({ sucesso: false, erro: 'Nenhuma atividade encontrada na tela.' });
+    } else {
+      // Inicia no background e responde pro popup
+      chrome.runtime.sendMessage({
+        acao: 'processarLoteEmBackground',
+        links: links,
+        colunas: request.colunasSelecionadas || []
+      });
+      // Retornar simulado pra fechar a promesa
+      sendResponse({ sucesso: true, mensagem: `Iniciado processamento de ${links.length} atividades em background...` });
+    }
     return true;
   }
 
