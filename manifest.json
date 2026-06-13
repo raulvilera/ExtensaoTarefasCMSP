@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "CMSP Smart Collector V3.0",
-  "version": "3.0",
-  "description": "Extração inteligente de diário de classe do CMSP (cmsp.ip.tv) para Google Sheets - V3.0",
+  "name": "CMSP Smart Collector V3.1",
+  "version": "3.1",
+  "description": "Extração inteligente de diário de classe do CMSP (cmsp.ip.tv) para Google Sheets - V3.1",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2a+SgFVJKQbvBmBLG7gNUQKf3Z2YQXpGTUlF0PqFZ6vH3lS8kSp0M4N7dV2c+kxuXp9HRrqzFm3Y4bLTEDSt8RWdPNhAVjN+n2tV6JCWdTQg5qXuMC5Y9lVKwH2pN3FzRsVePkC8LrTNmBjZ0+XCvuH8g4FZeLQdKsGb7HmUp0vKrVQeBzQvWfUZt3pX8sKnH2qDgT6WFNyV4L9kZxCqL4j8pF2yX3bJtEqMr0HVeS7lU5TcK3BNpVWmRhQsFt6kXYrM8Z9eTzw3C6dA5KvJ7nBuQ4mL0PxYhWs2DjRiV+oN6fEaHtGcP5nUX8qJ2KbYlTzDw==",
   "permissions": [
     "activeTab",
     "scripting",
@@ -14,7 +15,10 @@
     "https://cmsp.ip.tv/*",
     "https://sheets.googleapis.com/*",
     "https://raw.githubusercontent.com/*",
-    "https://api.github.com/*"
+    "https://api.github.com/*",
+    "https://saladofuturoprofessor.educacao.sp.gov.br/*",
+    "https://accounts.google.com/*",
+    "https://oauth2.googleapis.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -26,7 +30,10 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://cmsp.ip.tv/tms/task*"],
+      "matches": [
+        "https://cmsp.ip.tv/tms/task*",
+        "https://saladofuturoprofessor.educacao.sp.gov.br/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
