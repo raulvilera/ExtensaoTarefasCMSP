@@ -1,7 +1,7 @@
 // content.js — CMSP Smart Collector V3.0
 // Coleta apenas as colunas selecionadas pelo usuário no popup
 
-function waitForTable(timeout = 10000) {
+function waitForTable(timeout = 15000) // V3.1: aumentado {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const check = () => {
@@ -26,7 +26,7 @@ function normalizarHeader(h) {
   const lower = h.toLowerCase().trim();
   
   // Identificadores únicos (ID) - CMSP usa várias formas
-  if (lower === 'id' || lower === 'nº' || lower === 'no.' || lower === '#' || lower === 'ra' || lower === 'código' || lower === 'matricula' || lower === 'matrícula') {
+  if (lower === 'id' || lower === 'nº' || lower === 'no.' || lower === '#' || lower === 'ra' || lower === 'código' || lower === 'matricula' || lower === 'matrícula' || lower === 'número' || lower === 'num' || lower === 'nro') {
     return 'Id';
   }
   
@@ -47,9 +47,14 @@ function normalizarHeader(h) {
   return h; // mantém o nome original se não reconhecer
 }
 
+// DICIONÁRIO DE TURMAS — V3.1
+// Como descobrir o ID: abra uma atividade do CMSP, copie o valor da coluna Turma
+// e adicione aqui no formato 'id-da-turma': 'Nome Legível'
+// Exemplo: 'r214c52ef35fef6464-sp': '9º Ano A'
 const DICIONARIO_TURMAS = {
-  'r214c52ef35fef6464-sp': '8º Ano A',
-  // O usuário pode adicionar novos IDs de turmas nesta lista copiando a linha acima
+  // Adicione os IDs da sua escola aqui:
+  // 'ID_COPIADO_DO_CMSP': '9º Ano A',
+  // 'OUTRO_ID': '9º Ano B',
 };
 
 // Lê as linhas filtrando apenas as colunas desejadas
@@ -100,9 +105,12 @@ function readTableRows(colunasSelecionadas) {
 }
 
 async function goToNextPage() {
-  // Tenta aria-label padrão MUI/React
+  // V3.1: Seletores expandidos para MUI v4/v5 e variações do CMSP
   const paginationNexts = document.querySelectorAll(
-    '[aria-label="Go to next page"], [title="Próxima página"], [title="Next page"]'
+    '[aria-label="Go to next page"], [aria-label="Próxima página"], ' +
+    '[title="Próxima página"], [title="Next page"], ' +
+    '.MuiTablePagination-actions button:last-child, ' +
+    '[data-testid="next-page"]'
   );
   if (paginationNexts.length > 0 && !paginationNexts[0].disabled) {
     paginationNexts[0].click();
