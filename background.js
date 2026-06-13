@@ -610,7 +610,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Verifica se a aba ativa é a Sala do Futuro
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab || !tab.url || !tab.url.includes('saladofuturoprofessor.educacao.sp.gov.br')) {
+        // V3.1: aceita variações do domínio da Sala do Futuro
+        const isSalaFuturo = tab && tab.url && (
+          tab.url.includes('saladofuturoprofessor.educacao.sp.gov.br') ||
+          tab.url.includes('saladofuturo.educacao.sp.gov.br') ||
+          tab.url.includes('diario-classe')
+        );
+        if (!isSalaFuturo) {
           sendResponse({ sucesso: false, erro: 'Abra a página de lançamento de notas da Sala do Futuro na aba ativa antes de lançar.' });
           return;
         }
@@ -619,7 +625,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         try {
           await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
         } catch (_) { /* já injetado — ignora */ }
-        await new Promise(r => setTimeout(r, 700));
+        await new Promise(r => setTimeout(r, 1200)); // V3.1: aguarda React montar
 
         let resultado;
         try {
@@ -696,7 +702,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const aba = await chrome.tabs.create({ url: url, active: false });
           
           // Aguarda carregamento do React da página
-          await new Promise(r => setTimeout(r, 4500));
+          await new Promise(r => setTimeout(r, 7000)); // V3.1: aumentado para React do CMSP
 
           try {
             await chrome.scripting.executeScript({ target: { tabId: aba.id }, files: ['content.js'] });
